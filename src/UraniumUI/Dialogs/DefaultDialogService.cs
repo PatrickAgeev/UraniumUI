@@ -88,6 +88,72 @@ public class DefaultDialogService : IDialogService
         return await tcs.Task;
     }
 
+    public virtual async Task<IDisposable> DisplayBusyAsync(string title, string message, bool cancellable = false)
+    {
+        var currentPage = GetCurrentPage();
+
+        var popupPage = new ContentPage
+        {
+            BackgroundColor = GetBackdropColor(),
+            Content = GetFrame(currentPage.Width, new VerticalStackLayout
+            {
+                GetHeader(title),
+                GetDivider(),
+                new VerticalStackLayout
+                {
+                    Padding = 20,
+                    Children = 
+                    {
+                        new ActivityIndicator
+                        {
+                            IsRunning = true,
+                            IsVisible = true,
+                            HorizontalOptions = LayoutOptions.Center,
+                        },
+                        new Label
+                        {
+                            Text = message,
+                            HorizontalOptions = LayoutOptions.Center,
+                        }
+                    }
+                },
+                cancellable ? GetFooter(new Dictionary<string, Command>
+                {
+                    {
+                        "Cancel", new Command(() =>
+                        {
+                            currentPage.Navigation.PopModalAsync(animated: false);
+                            throw new OperationCanceledException();
+                        })
+                    }
+                }) : null
+            })
+        };
+
+        await currentPage.Navigation.PushModalAsync(ConfigurePopupPage(popupPage), animated: false);
+
+        return new DisposableAction(() =>
+        {
+            var currentPage = GetCurrentPage();
+            currentPage.Navigation.PopModalAsync(animated: false);
+        });
+    }
+
+    public class DisposableAction : IDisposable
+    {
+        Action action;
+
+        public DisposableAction(Action action)
+        {
+            this.action = action;
+        }
+
+        public void Dispose()
+        {
+            action?.Invoke();
+        }
+    }
+
     public virtual Task<IEnumerable<T>> DisplayCheckBoxPromptAsync<T>(
         string message,
         IEnumerable<T> selectionSource,
